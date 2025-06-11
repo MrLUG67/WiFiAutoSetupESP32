@@ -1,11 +1,11 @@
 /* WiFiAutoSetupESP32.h
- * #wifi_2025-05-21_006
- * Автоподключение к Wi-Fi: порт 80 в AP, порт 8080 в STA
+ * #wifi_2025-05-21_007
+ * Автоподключение к Wi-Fi с Preferences: порт 80 в AP, порт 8080 в STA
  */
 #pragma once
 #include <WiFi.h>
 #include <WebServer.h>
-#include <EEPROM.h>
+#include <Preferences.h>
 
 class WiFiAutoSetup {
   const char* apSSID = "ESP32";
@@ -17,10 +17,10 @@ class WiFiAutoSetup {
   WebServer configServerAP = WebServer(80);
   WebServer configServerSTA = WebServer(8080);
   WebServer* activeServer = nullptr;
+  Preferences prefs;
 
   String ssid = "XXXX";
   String password = "YYYYYYY";
-  const int EEPROM_SIZE = 128, SSID_ADDR = 0, PASS_ADDR = 64;
 
 public:
   void begin();
