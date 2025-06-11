@@ -1,21 +1,19 @@
 #include "WiFiAutoSetupESP32.h"
 
 void WiFiAutoSetup::saveWiFiConfig(const String& s, const String& p) {
-  EEPROM.begin(EEPROM_SIZE);
-  for (int i = 0; i < 32; i++) EEPROM.write(SSID_ADDR + i, i < s.length() ? s[i] : 0);
-  for (int i = 0; i < 32; i++) EEPROM.write(PASS_ADDR + i, i < p.length() ? p[i] : 0);
-  EEPROM.commit();
-  Serial.println("[EEPROM] Сохранены параметры сети");
+  prefs.begin("wifi", false);
+  prefs.putString("ssid", s);
+  prefs.putString("pass", p);
+  prefs.end();
+  Serial.println("[NVS] Сохранены параметры сети");
 }
 
 void WiFiAutoSetup::loadWiFiConfig() {
-  EEPROM.begin(EEPROM_SIZE);
-  char ssidBuff[33], passBuff[33];
-  for (int i = 0; i < 32; i++) ssidBuff[i] = EEPROM.read(SSID_ADDR + i);
-  for (int i = 0; i < 32; i++) passBuff[i] = EEPROM.read(PASS_ADDR + i);
-  ssidBuff[32] = '\0'; passBuff[32] = '\0';
-  ssid = String(ssidBuff); password = String(passBuff);
-  Serial.println("[EEPROM] Загружены параметры сети");
+  prefs.begin("wifi", true);
+  ssid = prefs.getString("ssid", "XXXX");
+  password = prefs.getString("pass", "YYYYYYY");
+  prefs.end();
+  Serial.println("[NVS] Загружены параметры сети");
   Serial.print("SSID: "); Serial.println(ssid);
 }
 
@@ -31,7 +29,7 @@ void WiFiAutoSetup::handleRoot() {
     <div id="networks"></div>
     <script>
     fetch('/list').then(r => r.json()).then(j => {
-      let s = '<select onchange=\"document.getElementById(\\'ssid\\').value=this.value\">';
+      let s = '<select onchange="document.getElementById(\'ssid\').value=this.value">';
       j.forEach(e => s += `<option>${e}</option>`);
       s += '</select>'; document.getElementById('networks').innerHTML = s;
     });
@@ -56,17 +54,11 @@ void WiFiAutoSetup::handleScan() {
 
 void WiFiAutoSetup::handleList() {
   Serial.println("[WiFi] Безопасное сканирование сетей...");
-
-  // Сохраняем текущий режим
   wifi_mode_t previousMode = WiFi.getMode();
-
-  // Выключаем AP и переключаемся в STA
   WiFi.softAPdisconnect(true);
   delay(150);
   WiFi.mode(WIFI_STA);
   delay(200);
-
-  // Сканируем
   int n = WiFi.scanNetworks();
   String json = "[";
   for (int i = 0; i < n; i++) {
@@ -74,14 +66,11 @@ void WiFiAutoSetup::handleList() {
     json += '"' + WiFi.SSID(i) + '"';
   }
   json += "]";
-
-  // Восстанавливаем режим
   WiFi.mode(previousMode);
   if (previousMode & WIFI_AP) {
     WiFi.softAP(apSSID, apPASS);
     WiFi.softAPConfig(apIP, apGW, apMSK);
   }
-
   activeServer->send(200, "application/json", json);
 }
 
