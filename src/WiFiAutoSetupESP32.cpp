@@ -53,11 +53,17 @@ void WiFiAutoSetup::handleScan() {
 }
 
 void WiFiAutoSetup::handleList() {
-  Serial.println("[WiFi] Безопасное сканирование сетей...");
-  wifi_mode_t previousMode = WiFi.getMode();
-  WiFi.softAPdisconnect(true);
-  delay(150);
-  WiFi.mode(WIFI_STA);
+  Serial.println("[WiFi] Безопасное сканирование сетей (без смены режима)...");
+
+  // Отключаем AP временно, если он активен
+  bool wasAP = WiFi.getMode() & WIFI_AP;
+  if (wasAP) {
+    WiFi.softAPdisconnect(true);
+    delay(200);
+  }
+
+  // Включаем STA, если не включён
+  WiFi.enableSTA(true);
   delay(200);
 
   int n = WiFi.scanNetworks();
@@ -68,8 +74,10 @@ void WiFiAutoSetup::handleList() {
   }
   json += "]";
 
-  WiFi.mode(previousMode);
-  if (previousMode & WIFI_AP) {
+  // Возвращаем AP, если был
+  if (wasAP) {
+    WiFi.enableAP(true);
+    delay(100);
     WiFi.softAP(apSSID, apPASS);
     WiFi.softAPConfig(apIP, apGW, apMSK);
   }
