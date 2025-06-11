@@ -1,4 +1,3 @@
-
 #include "WiFiAutoSetupESP32.h"
 
 void WiFiAutoSetup::saveWiFiConfig(const String& s, const String& p) {
@@ -56,6 +55,13 @@ void WiFiAutoSetup::handleScan() {
 }
 
 void WiFiAutoSetup::handleList() {
+  Serial.println("[WiFi] Безопасное сканирование сетей...");
+  wifi_mode_t previousMode = WiFi.getMode();
+  WiFi.softAPdisconnect(true);
+  delay(100);
+  WiFi.mode(WIFI_STA);
+  delay(100);
+
   int n = WiFi.scanNetworks();
   String json = "[";
   for (int i = 0; i < n; i++) {
@@ -63,6 +69,13 @@ void WiFiAutoSetup::handleList() {
     json += '"' + WiFi.SSID(i) + '"';
   }
   json += "]";
+
+  WiFi.mode(previousMode);
+  if (previousMode & WIFI_AP) {
+    WiFi.softAP(apSSID, apPASS);
+    WiFi.softAPConfig(apIP, apGW, apMSK);
+  }
+
   activeServer->send(200, "application/json", json);
 }
 
