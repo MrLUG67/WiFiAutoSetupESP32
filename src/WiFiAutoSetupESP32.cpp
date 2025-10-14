@@ -231,6 +231,12 @@ void WiFiAutoSetup::setupAPMode() {
   WiFi.softAP(apSSID, apPASS);
   delay(100);
   Serial.println("[WiFi] Точка доступа активна (порт 80)");
+  if (MDNS.begin(mdnsHostname)) {
+    MDNS.addService("http", "tcp", 80);
+    Serial.print("[mDNS] Хостнейм (AP): "); Serial.print(mdnsHostname); Serial.println(".local");
+  } else {
+    Serial.println("[mDNS] Ошибка старта mDNS в AP");
+  }
   startWebServer(configServerAP);
 }
 
@@ -252,6 +258,12 @@ void WiFiAutoSetup::begin() {
       Serial.println("\n[WiFi] Подключено!");
       Serial.print("[WiFi] IP адрес: "); Serial.println(WiFi.localIP());
       Serial.println("[Web] Интерфейс настройки доступен на порту 8080");
+      if (MDNS.begin(mdnsHostname)) {
+        MDNS.addService("http", "tcp", 8080);
+        Serial.print("[mDNS] Хостнейм: "); Serial.print(mdnsHostname); Serial.println(".local");
+      } else {
+        Serial.println("[mDNS] Ошибка старта mDNS");
+      }
       startWebServer(configServerSTA);
       return;
     }
