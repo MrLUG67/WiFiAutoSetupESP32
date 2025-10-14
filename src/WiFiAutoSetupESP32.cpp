@@ -55,7 +55,7 @@ void WiFiAutoSetup::handleRoot() {
           <div class="card">
             <div class="head">
               <h1>Настройка Wi‑Fi</h1>
-              <span class="tag"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 20C13.1 20 14 19.1 14 18H10C10 19.1 10.9 20 12 20ZM18 14V10C18 6.93 16.36 4.36 13.5 3.68V3C13.5 2.17 12.83 1.5 12 1.5C11.17 1.5 10.5 2.17 10.5 3V3.68C7.63 4.36 6 6.92 6 10V14L4 16V17H20V16L18 14Z"/></svg> AP: 192.168.1.1 • WEB: 80/8080</span>
+              <span class="tag"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 20C13.1 20 14 19.1 14 18H10C10 19.1 10.9 20 12 20ZM18 14V10C18 6.93 16.36 4.36 13.5 3.68V3C13.5 2.17 12.83 1.5 12 1.5C11.17 1.5 10.5 2.17 10.5 3V3.68C7.63 4.36 6 6.92 6 10V14L4 16V17H20V16L18 14Z"/></svg> AP: 192.168.10.1 • WEB: 80/8080</span>
             </div>
 
             <form action="/save" class="grid">

@@ -10,8 +10,8 @@
 class WiFiAutoSetup {
   const char* apSSID = "ESP32";
   const char* apPASS = "12345678";
-  const IPAddress apIP = IPAddress(192,168,1,1);
-  const IPAddress apGW = IPAddress(192,168,1,1);
+  const IPAddress apIP = IPAddress(192,168,10,1);
+  const IPAddress apGW = IPAddress(192,168,10,1);
   const IPAddress apMSK = IPAddress(255,255,255,0);
 
   WebServer configServerAP = WebServer(80);
