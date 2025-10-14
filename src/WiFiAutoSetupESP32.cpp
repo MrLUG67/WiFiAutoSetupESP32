@@ -19,21 +19,122 @@ void WiFiAutoSetup::loadWiFiConfig() {
 
 void WiFiAutoSetup::handleRoot() {
   String html = R"rawliteral(
-    <html><head><meta charset="UTF-8"></head><body>
-    <h2>Настройка Wi-Fi</h2>
-    <form action="/save">Сеть: <input name="s" id="ssid"><br>
-    Пароль: <input name="p" type="text"><br>
-    <input type="submit" value="Запомнить сеть"></form>
-    <form action="/scan"><input type="submit" value="Сканировать сети"></form>
-    <form action="/reboot"><input type="submit" value="Рестарт контроллера"></form>
-    <div id="networks"></div>
-    <script>
-    fetch('/list').then(r => r.json()).then(j => {
-      let s = '<select onchange="document.getElementById(\'ssid\').value=this.value">';
-      j.forEach(e => s += `<option>${e}</option>`);
-      s += '</select>'; document.getElementById('networks').innerHTML = s;
-    });
-    </script></body></html>
+    <html>
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Настройка Wi‑Fi</title>
+        <style>
+          :root { --bg:#0f172a; --card:#111827; --ink:#e5e7eb; --muted:#9ca3af; --accent:#22c55e; --accent2:#3b82f6; --danger:#ef4444; }
+          * { box-sizing: border-box; }
+          body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif; background: linear-gradient(135deg,#0f172a,#111827); color: var(--ink); }
+          .wrap { min-height: 100vh; display:flex; align-items:center; justify-content:center; padding: 24px; }
+          .card { width: 100%; max-width: 720px; background: rgba(17,24,39,0.9); border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.35); }
+          .head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom: 16px; }
+          h1 { margin:0; font-size: 20px; font-weight: 700; letter-spacing: .3px; }
+          .muted { color: var(--muted); font-size: 13px; }
+          .grid { display:grid; grid-template-columns: 1fr; gap:12px; }
+          @media (min-width:740px) { .grid { grid-template-columns: 1fr 1fr; } }
+          label { font-size: 13px; color: var(--muted); display:block; margin-bottom:6px; }
+          input[type=text], select { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.04); color: var(--ink); outline: none; }
+          .row { display:flex; gap:12px; align-items:center; }
+          .btn { appearance:none; border:0; border-radius: 10px; padding: 10px 14px; font-weight:600; color:#0b1220; cursor:pointer; transition: transform .04s ease; }
+          .btn:active { transform: translateY(1px); }
+          .btn-primary { background: linear-gradient(135deg, var(--accent), #16a34a); color:#071410; }
+          .btn-blue { background: linear-gradient(135deg, var(--accent2), #2563eb); color:#061021; }
+          .btn-danger { background: linear-gradient(135deg, var(--danger), #dc2626); color:#1a0707; }
+          .footer { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-top: 8px; flex-wrap: wrap; }
+          .select-wrap { display:flex; gap: 8px; align-items: end; }
+          .hint { font-size: 12px; color: var(--muted); }
+          .hr { height:1px; background: rgba(255,255,255,0.08); margin: 12px 0; border-radius:1px; }
+          .tag { display:inline-flex; align-items:center; gap:6px; font-size:12px; padding:6px 10px; border-radius:999px; background: rgba(255,255,255,0.06); color: var(--ink); }
+        </style>
+      </head>
+      <body>
+        <div class="wrap">
+          <div class="card">
+            <div class="head">
+              <h1>Настройка Wi‑Fi</h1>
+              <span class="tag"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 20C13.1 20 14 19.1 14 18H10C10 19.1 10.9 20 12 20ZM18 14V10C18 6.93 16.36 4.36 13.5 3.68V3C13.5 2.17 12.83 1.5 12 1.5C11.17 1.5 10.5 2.17 10.5 3V3.68C7.63 4.36 6 6.92 6 10V14L4 16V17H20V16L18 14Z"/></svg> AP: 192.168.1.1 • WEB: 80/8080</span>
+            </div>
+
+            <form action="/save" class="grid">
+              <div>
+                <label for="ssid">Сеть (SSID)</label>
+                <input name="s" id="ssid" type="text" placeholder="Выберите из списка или введите вручную">
+              </div>
+              <div>
+                <label for="pass">Пароль</label>
+                <input name="p" id="pass" type="text" placeholder="Пароль сети">
+              </div>
+
+              <div class="select-wrap">
+                <div style="flex:1">
+                  <label for="ssidList">Доступные сети</label>
+                  <select id="ssidList"></select>
+                </div>
+                <button type="button" id="refresh" class="btn btn-blue">Обновить список</button>
+              </div>
+
+              <div class="row">
+                <button type="submit" class="btn btn-primary">Сохранить и подключиться</button>
+                <a class="hint">Сохранение произойдёт только при успешном подключении</a>
+              </div>
+            </form>
+
+            <div class="hr"></div>
+
+            <div class="footer">
+              <form action="/scan" method="get"><button class="btn btn-blue" type="submit">Сканировать (перезагрузить список)</button></form>
+              <form action="/reboot" method="get"><button class="btn btn-danger" type="submit">Рестарт контроллера</button></form>
+            </div>
+            <div class="muted" id="status" style="margin-top:8px"></div>
+          </div>
+        </div>
+
+        <script>
+          const ssidInput = document.getElementById('ssid');
+          const list = document.getElementById('ssidList');
+          const statusEl = document.getElementById('status');
+          const refreshBtn = document.getElementById('refresh');
+
+          function setStatus(msg) {
+            statusEl.textContent = msg || '';
+          }
+
+          function fillList(items) {
+            list.innerHTML = '';
+            const opt0 = document.createElement('option');
+            opt0.value = '';
+            opt0.textContent = items && items.length ? '— выбрать сеть —' : 'сетей не найдено';
+            list.appendChild(opt0);
+            (items || []).forEach(e => {
+              const o = document.createElement('option');
+              o.value = e; o.textContent = e; list.appendChild(o);
+            });
+          }
+
+          list.addEventListener('change', () => {
+            if (list.value) ssidInput.value = list.value;
+          });
+
+          async function loadList() {
+            setStatus('Поиск сетей...');
+            try {
+              const r = await fetch('/list', {cache:'no-store'});
+              const j = await r.json();
+              fillList(j);
+              setStatus('Готово');
+            } catch (e) {
+              setStatus('Ошибка получения списка сетей');
+            }
+          }
+
+          refreshBtn.addEventListener('click', loadList);
+          loadList();
+        </script>
+      </body>
+    </html>
   )rawliteral";
   activeServer->send(200, "text/html; charset=utf-8", html);
 }
