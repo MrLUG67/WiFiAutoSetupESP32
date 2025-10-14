@@ -6,7 +6,17 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <Preferences.h>
-#include <ESP32SSDP.h>
+#if defined(__has_include)
+#  if __has_include(<ESP32SSDP.h>)
+#    include <ESP32SSDP.h>
+#    define WIFI_AUTOSETUP_SSDP 1
+#  else
+#    define WIFI_AUTOSETUP_SSDP 0
+#  endif
+#else
+#  define WIFI_AUTOSETUP_SSDP 0
+#endif
+#include <WiFiUdp.h>
 
 class WiFiAutoSetup {
   const char* apSSID = "ESP32";
@@ -21,9 +31,18 @@ class WiFiAutoSetup {
   WebServer configServerSTA = WebServer(8080);
   WebServer* activeServer = nullptr;
   Preferences prefs;
+  WiFiUDP udp;
 
   String ssid = "XXXX";
   String password = "YYYYYYY";
+  String deviceName = "ESP32-UNSET";
+
+  // UDP beacon settings
+  const uint16_t udpBeaconPort = 40000;
+  unsigned long beaconUntilMs = 0;
+  unsigned long lastBeaconMs = 0;
+
+  void sendUdpBeacon();
 
 public:
   void begin();
@@ -32,6 +51,9 @@ public:
 private:
   void loadWiFiConfig();
   void saveWiFiConfig(const String& ssid, const String& password);
+  void loadDeviceName();
+  void saveDeviceName();
+  void ensureDeviceName();
   void setupAPMode();
   void setupWiFi();
   void startWebServer(WebServer& server);

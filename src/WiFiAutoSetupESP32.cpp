@@ -17,6 +17,46 @@ void WiFiAutoSetup::loadWiFiConfig() {
   Serial.print("SSID: "); Serial.println(ssid);
 }
 
+void WiFiAutoSetup::loadDeviceName() {
+  prefs.begin("wifi", true);
+  deviceName = prefs.getString("devname", "");
+  prefs.end();
+}
+
+void WiFiAutoSetup::saveDeviceName() {
+  prefs.begin("wifi", false);
+  prefs.putString("devname", deviceName);
+  prefs.end();
+}
+
+void WiFiAutoSetup::ensureDeviceName() {
+  loadDeviceName();
+  if (deviceName.length() == 0) {
+    // Generate random-like suffix from MAC
+    uint64_t mac = ESP.getEfuseMac();
+    uint32_t lo = (uint32_t)(mac & 0xFFFFFF);
+    char buf[16];
+    snprintf(buf, sizeof(buf), "%06X", lo);
+    deviceName = String("ESP32-ULT-") + String(buf);
+    saveDeviceName();
+    Serial.print("[NVS] Сгенерировано имя устройства: "); Serial.println(deviceName);
+  } else {
+    Serial.print("[NVS] Имя устройства: "); Serial.println(deviceName);
+  }
+}
+
+void WiFiAutoSetup::sendUdpBeacon() {
+  if (WiFi.status() != WL_CONNECTED) return;
+  IPAddress ip = WiFi.localIP();
+  String json = String("{") +
+    "\"name\":\"" + deviceName + "\"," +
+    "\"ip\":\"" + ip.toString() + "\"," +
+    "\"mac\":\"" + String((uint32_t)ESP.getEfuseMac(), HEX) + "\"}";
+  udp.beginPacket(IPAddress(255,255,255,255), udpBeaconPort);
+  udp.print(json);
+  udp.endPacket();
+}
+
 void WiFiAutoSetup::handleRoot() {
   String html = R"rawliteral(
     <html>
@@ -248,6 +288,7 @@ void WiFiAutoSetup::setupAPMode() {
   delay(100);
   Serial.println("[WiFi] Точка доступа активна (порт 80)");
   // SSDP/UPnP объявление для AP (порт 80)
+#if WIFI_AUTOSETUP_SSDP
   SSDP.setDeviceType("upnp:rootdevice");
   SSDP.setSchemaURL("/description.xml");
   SSDP.setName(ssdpName);
@@ -260,6 +301,9 @@ void WiFiAutoSetup::setupAPMode() {
   SSDP.setManufacturerURL("https://espressif.com/");
   SSDP.begin();
   Serial.println("[SSDP] Объявление SSDP запущено (AP)");
+#else
+  Serial.println("[SSDP] Библиотека ESP32SSDP не найдена, SSDP отключён");
+#endif
   startWebServer(configServerAP);
 }
 
@@ -268,6 +312,7 @@ void WiFiAutoSetup::begin() {
   delay(500);
   Serial.println("[System] Запуск контроллера...");
   loadWiFiConfig();
+  ensureDeviceName();
   bool hasValidCreds = (ssid.length() > 0 && password.length() > 0 && ssid != "XXXX");
   if (hasValidCreds) {
     Serial.print("[WiFi] Попытка подключения к сети: "); Serial.println(ssid);
@@ -281,7 +326,11 @@ void WiFiAutoSetup::begin() {
       Serial.println("\n[WiFi] Подключено!");
       Serial.print("[WiFi] IP адрес: "); Serial.println(WiFi.localIP());
       Serial.println("[Web] Интерфейс настройки доступен на порту 8080");
+      // Start UDP beacons for 10 seconds to announce IP
+      beaconUntilMs = millis() + 10000;
+      lastBeaconMs = 0;
       // SSDP/UPnP объявление для STA (порт 8080)
+#if WIFI_AUTOSETUP_SSDP
       SSDP.setDeviceType("upnp:rootdevice");
       SSDP.setSchemaURL("/description.xml");
       SSDP.setName(ssdpName);
@@ -294,6 +343,9 @@ void WiFiAutoSetup::begin() {
       SSDP.setManufacturerURL("https://espressif.com/");
       SSDP.begin();
       Serial.println("[SSDP] Объявление SSDP запущено (STA)");
+#else
+      Serial.println("[SSDP] Библиотека ESP32SSDP не найдена, SSDP отключён");
+#endif
       startWebServer(configServerSTA);
       return;
     }
@@ -306,4 +358,11 @@ void WiFiAutoSetup::begin() {
 
 void WiFiAutoSetup::handleClient() {
   if (activeServer) activeServer->handleClient();
+  // Periodic UDP beacon during the announcement window
+  if (beaconUntilMs && millis() < beaconUntilMs) {
+    if (millis() - lastBeaconMs > 1000) {
+      sendUdpBeacon();
+      lastBeaconMs = millis();
+    }
+  }
 }
