@@ -40,8 +40,40 @@ void WiFiAutoSetup::handleRoot() {
 
 void WiFiAutoSetup::handleSave() {
   if (activeServer->hasArg("s") && activeServer->hasArg("p")) {
-    saveWiFiConfig(activeServer->arg("s"), activeServer->arg("p"));
-    activeServer->send(200, "text/plain; charset=utf-8", "Сеть сохранена. Перезагрузите контроллер.");
+    String newSsid = activeServer->arg("s");
+    String newPass = activeServer->arg("p");
+
+    // Try to connect before saving
+    Serial.println("[WiFi] Проверка новых параметров подключения...");
+    wifi_mode_t prevMode = WiFi.getMode();
+    if (!(prevMode & WIFI_STA)) {
+      WiFi.mode((wifi_mode_t)(prevMode | WIFI_STA));
+    }
+    WiFi.begin(newSsid.c_str(), newPass.c_str());
+    unsigned long t0 = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - t0 < 10000) {
+      delay(500);
+      Serial.print(".");
+    }
+    if (WiFi.status() == WL_CONNECTED) {
+      Serial.println("\n[WiFi] Успешно подключено. Сохраняю параметры...");
+      saveWiFiConfig(newSsid, newPass);
+      activeServer->send(200, "text/plain; charset=utf-8", "Подключено. Параметры сохранены. Перезагрузка...");
+      delay(1000);
+      ESP.restart();
+    } else {
+      Serial.println("\n[WiFi] Ошибка подключения. Параметры не сохранены.");
+      activeServer->send(400, "text/plain; charset=utf-8", "Не удалось подключиться с указанными параметрами. Проверьте SSID/пароль.");
+      // Restore previous mode if we changed it
+      if (prevMode != WiFi.getMode()) {
+        WiFi.mode(prevMode);
+        if (prevMode & WIFI_AP) {
+          // Ensure AP config remains intact
+          WiFi.softAPConfig(apIP, apGW, apMSK);
+          WiFi.softAP(apSSID, apPASS);
+        }
+      }
+    }
   } else {
     activeServer->send(400, "text/plain; charset=utf-8", "Ошибка: отсутствует имя сети или пароль");
   }
@@ -55,10 +87,12 @@ void WiFiAutoSetup::handleScan() {
 void WiFiAutoSetup::handleList() {
   Serial.println("[WiFi] Безопасное сканирование сетей...");
   wifi_mode_t previousMode = WiFi.getMode();
-  WiFi.softAPdisconnect(true);
-  delay(150);
-  WiFi.mode(WIFI_STA);
-  delay(200);
+  bool addedSta = false;
+  if (!(previousMode & WIFI_STA)) {
+    WiFi.mode((wifi_mode_t)(previousMode | WIFI_STA));
+    addedSta = true;
+    delay(150);
+  }
   int n = WiFi.scanNetworks();
   String json = "[";
   for (int i = 0; i < n; i++) {
@@ -66,10 +100,8 @@ void WiFiAutoSetup::handleList() {
     json += '"' + WiFi.SSID(i) + '"';
   }
   json += "]";
-  WiFi.mode(previousMode);
-  if (previousMode & WIFI_AP) {
-    WiFi.softAP(apSSID, apPASS);
-    WiFi.softAPConfig(apIP, apGW, apMSK);
+  if (addedSta) {
+    WiFi.mode(previousMode);
   }
   activeServer->send(200, "application/json", json);
 }
@@ -106,22 +138,27 @@ void WiFiAutoSetup::begin() {
   delay(500);
   Serial.println("[System] Запуск контроллера...");
   loadWiFiConfig();
-  Serial.print("[WiFi] Попытка подключения к сети: "); Serial.println(ssid);
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid.c_str(), password.c_str());
-  unsigned long start = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - start < 10000) {
-    delay(500); Serial.print(".");
-  }
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("\n[WiFi] Подключено!");
-    Serial.print("[WiFi] IP адрес: "); Serial.println(WiFi.localIP());
-    Serial.println("[Web] Интерфейс настройки доступен на порту 8080");
-    startWebServer(configServerSTA);
+  bool hasValidCreds = (ssid.length() > 0 && password.length() > 0 && ssid != "XXXX");
+  if (hasValidCreds) {
+    Serial.print("[WiFi] Попытка подключения к сети: "); Serial.println(ssid);
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(ssid.c_str(), password.c_str());
+    unsigned long start = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - start < 10000) {
+      delay(500); Serial.print(".");
+    }
+    if (WiFi.status() == WL_CONNECTED) {
+      Serial.println("\n[WiFi] Подключено!");
+      Serial.print("[WiFi] IP адрес: "); Serial.println(WiFi.localIP());
+      Serial.println("[Web] Интерфейс настройки доступен на порту 8080");
+      startWebServer(configServerSTA);
+      return;
+    }
+    Serial.println("\n[WiFi] Не удалось подключиться по сохранённым параметрам.");
   } else {
-    Serial.println("\n[WiFi] Не удалось подключиться. Включаем AP...");
-    setupAPMode();
+    Serial.println("[WiFi] Параметры сети отсутствуют. Запускаю AP для настройки...");
   }
+  setupAPMode();
 }
 
 void WiFiAutoSetup::handleClient() {
