@@ -6,7 +6,7 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <Preferences.h>
-#include <ESPmDNS.h>
+#include <ESP32SSDP.h>
 
 class WiFiAutoSetup {
   const char* apSSID = "ESP32";
@@ -15,7 +15,7 @@ class WiFiAutoSetup {
   const IPAddress apGW = IPAddress(192,168,10,1);
   const IPAddress apMSK = IPAddress(255,255,255,0);
 
-  const char* mdnsHostname = "esp32-device"; // mDNS имя хоста
+  const char* ssdpName = "ESP32 WiFi Config"; // Имя устройства для SSDP
 
   WebServer configServerAP = WebServer(80);
   WebServer configServerSTA = WebServer(8080);
@@ -41,4 +41,5 @@ private:
   void handleScan();
   void handleList();
   void handleReboot();
+  void handleDescription();
 };

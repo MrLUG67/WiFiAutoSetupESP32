@@ -213,6 +213,21 @@ void WiFiAutoSetup::handleReboot() {
   ESP.restart();
 }
 
+void WiFiAutoSetup::handleDescription() {
+  String xml = "<?xml version=\"1.0\"?>\n";
+  xml += "<root xmlns=\"urn:schemas-upnp-org:device-1-0\">\n";
+  xml += "  <specVersion><major>1</major><minor>0</minor></specVersion>\n";
+  xml += "  <device>\n";
+  xml += "    <deviceType>urn:schemas-upnp-org:device:Basic:1</deviceType>\n";
+  xml += "    <friendlyName>" + String(ssdpName) + "</friendlyName>\n";
+  xml += "    <manufacturer>ESP32</manufacturer>\n";
+  xml += "    <modelName>ESP32</modelName>\n";
+  xml += "    <UDN>uuid:" + String((uint32_t)ESP.getEfuseMac(), HEX) + "</UDN>\n";
+  xml += "  </device>\n";
+  xml += "</root>\n";
+  activeServer->send(200, "application/xml", xml);
+}
+
 void WiFiAutoSetup::startWebServer(WebServer& serverRef) {
   activeServer = &serverRef;
   activeServer->on("/", [&]() { handleRoot(); });
@@ -220,6 +235,7 @@ void WiFiAutoSetup::startWebServer(WebServer& serverRef) {
   activeServer->on("/scan", [&]() { handleScan(); });
   activeServer->on("/list", [&]() { handleList(); });
   activeServer->on("/reboot", [&]() { handleReboot(); });
+  activeServer->on("/description.xml", [&]() { handleDescription(); });
   activeServer->begin();
   Serial.println("[Web] Веб-сервер запущен (порт зависит от режима)");
 }
@@ -231,12 +247,19 @@ void WiFiAutoSetup::setupAPMode() {
   WiFi.softAP(apSSID, apPASS);
   delay(100);
   Serial.println("[WiFi] Точка доступа активна (порт 80)");
-  if (MDNS.begin(mdnsHostname)) {
-    MDNS.addService("http", "tcp", 80);
-    Serial.print("[mDNS] Хостнейм (AP): "); Serial.print(mdnsHostname); Serial.println(".local");
-  } else {
-    Serial.println("[mDNS] Ошибка старта mDNS в AP");
-  }
+  // SSDP/UPnP объявление для AP (порт 80)
+  SSDP.setDeviceType("upnp:rootdevice");
+  SSDP.setSchemaURL("/description.xml");
+  SSDP.setName(ssdpName);
+  SSDP.setURL("/");
+  SSDP.setSerialNumber(String((uint32_t)ESP.getEfuseMac(), HEX));
+  SSDP.setModelName("ESP32");
+  SSDP.setModelNumber("1");
+  SSDP.setModelURL("https://github.com/");
+  SSDP.setManufacturer("ESP32");
+  SSDP.setManufacturerURL("https://espressif.com/");
+  SSDP.begin();
+  Serial.println("[SSDP] Объявление SSDP запущено (AP)");
   startWebServer(configServerAP);
 }
 
@@ -258,12 +281,19 @@ void WiFiAutoSetup::begin() {
       Serial.println("\n[WiFi] Подключено!");
       Serial.print("[WiFi] IP адрес: "); Serial.println(WiFi.localIP());
       Serial.println("[Web] Интерфейс настройки доступен на порту 8080");
-      if (MDNS.begin(mdnsHostname)) {
-        MDNS.addService("http", "tcp", 8080);
-        Serial.print("[mDNS] Хостнейм: "); Serial.print(mdnsHostname); Serial.println(".local");
-      } else {
-        Serial.println("[mDNS] Ошибка старта mDNS");
-      }
+      // SSDP/UPnP объявление для STA (порт 8080)
+      SSDP.setDeviceType("upnp:rootdevice");
+      SSDP.setSchemaURL("/description.xml");
+      SSDP.setName(ssdpName);
+      SSDP.setURL("/");
+      SSDP.setSerialNumber(String((uint32_t)ESP.getEfuseMac(), HEX));
+      SSDP.setModelName("ESP32");
+      SSDP.setModelNumber("1");
+      SSDP.setModelURL("https://github.com/");
+      SSDP.setManufacturer("ESP32");
+      SSDP.setManufacturerURL("https://espressif.com/");
+      SSDP.begin();
+      Serial.println("[SSDP] Объявление SSDP запущено (STA)");
       startWebServer(configServerSTA);
       return;
     }
